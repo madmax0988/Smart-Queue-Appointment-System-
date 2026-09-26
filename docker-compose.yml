@@ -1,0 +1,17 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: smart_queue
+    ports:
+      - '5432:5432'
+    volumes:
+      - smart_queue_pgdata:/var/lib/postgresql/data
+
+volumes:
+  smart_queue_pgdata:

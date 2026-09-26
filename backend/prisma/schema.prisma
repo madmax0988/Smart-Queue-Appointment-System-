@@ -1,0 +1,211 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  CUSTOMER
+  STAFF
+  ADMIN
+}
+
+enum AppointmentStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+  RESCHEDULED
+  COMPLETED
+  NO_SHOW
+}
+
+enum QueueEntryStatus {
+  WAITING
+  CALLED
+  IN_SERVICE
+  COMPLETED
+  SKIPPED
+  CANCELLED
+}
+
+enum QueueStatus {
+  OPEN
+  CLOSED
+}
+
+enum NotificationType {
+  APPOINTMENT_CONFIRMED
+  APPOINTMENT_CANCELLED
+  APPOINTMENT_RESCHEDULED
+  QUEUE_POSITION_CHANGED
+  TURN_APPROACHING
+  TOKEN_CALLED
+  APPOINTMENT_COMPLETED
+  ORG_DELAY
+}
+
+model User {
+  id             String    @id @default(uuid())
+  name           String
+  email          String    @unique
+  passwordHash   String
+  role           Role      @default(CUSTOMER)
+  refreshTokens  RefreshToken[]
+  appointments   Appointment[]
+  staffAssignments StaffAssignment[]
+  notifications  Notification[]
+  chatSessions   ChatSession[]
+  auditLogs      AuditLog[]
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  revoked   Boolean  @default(false)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+}
+
+model Organization {
+  id             String   @id @default(uuid())
+  name           String
+  description    String?
+  address        String?
+  operatingHours String?
+  services       Service[]
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+model Service {
+  id               String   @id @default(uuid())
+  organizationId   String
+  organization     Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name             String
+  description      String?
+  durationMinutes  Int      @default(15)
+  capacityPerSlot  Int      @default(1)
+  staffAssignments StaffAssignment[]
+  slots            AppointmentSlot[]
+  queues           Queue[]
+  appointments     Appointment[]
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
+
+model StaffAssignment {
+  id        String  @id @default(uuid())
+  staffId   String
+  staff     User    @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  serviceId String
+  service   Service @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+
+  @@unique([staffId, serviceId])
+}
+
+model AppointmentSlot {
+  id          String   @id @default(uuid())
+  serviceId   String
+  service     Service  @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  startTime   DateTime
+  endTime     DateTime
+  capacity    Int      @default(1)
+  bookedCount Int      @default(0)
+  appointments Appointment[]
+  createdAt   DateTime @default(now())
+
+  @@index([serviceId, startTime])
+}
+
+model Appointment {
+  id          String            @id @default(uuid())
+  userId      String
+  user        User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  serviceId   String
+  service     Service           @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  slotId      String
+  slot        AppointmentSlot   @relation(fields: [slotId], references: [id], onDelete: Cascade)
+  status      AppointmentStatus @default(CONFIRMED)
+  queueEntry  QueueEntry?
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  @@index([userId])
+}
+
+model Queue {
+  id         String       @id @default(uuid())
+  serviceId  String
+  service    Service      @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  queueDate  DateTime
+  status     QueueStatus  @default(OPEN)
+  lastToken  Int          @default(0)
+  entries    QueueEntry[]
+
+  @@unique([serviceId, queueDate])
+}
+
+model QueueEntry {
+  id            String           @id @default(uuid())
+  queueId       String
+  queue         Queue            @relation(fields: [queueId], references: [id], onDelete: Cascade)
+  appointmentId String           @unique
+  appointment   Appointment      @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  tokenNumber   Int
+  tokenLabel    String
+  position      Int
+  status        QueueEntryStatus @default(WAITING)
+  calledAt      DateTime?
+  completedAt   DateTime?
+  createdAt     DateTime         @default(now())
+
+  @@unique([queueId, tokenNumber])
+  @@index([queueId, status])
+}
+
+model Notification {
+  id        String            @id @default(uuid())
+  userId    String
+  user      User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  message   String
+  type      NotificationType
+  readStatus Boolean          @default(false)
+  createdAt DateTime          @default(now())
+
+  @@index([userId, readStatus])
+}
+
+model ChatSession {
+  id        String        @id @default(uuid())
+  userId    String
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages  ChatMessage[]
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+}
+
+model ChatMessage {
+  id        String      @id @default(uuid())
+  sessionId String
+  session   ChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  role      String
+  content   String
+  createdAt DateTime    @default(now())
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  actorId    String
+  actor      User     @relation(fields: [actorId], references: [id], onDelete: Cascade)
+  action     String
+  resourceId String?
+  metadata   String?
+  createdAt  DateTime @default(now())
+}
