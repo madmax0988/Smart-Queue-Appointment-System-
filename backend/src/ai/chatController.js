@@ -17,6 +17,37 @@ Rules you must always follow:
 
 const MAX_TOOL_ROUNDS = 5;
 
+const GEMINI_TOOLS = [
+  {
+    functionDeclarations: TOOL_DEFINITIONS.map((t) => ({
+      name: t.name,
+      description: t.description,
+      parametersJsonSchema: t.input_schema,
+    })),
+  },
+];
+
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+async function generateWithRetry(client, request) {
+  try {
+    return await client.models.generateContent(request);
+  } catch (err) {
+    if (err.status === 429) {
+      throw new AppError('The AI assistant has hit its usage limit for now. Please try again later.', 429);
+    }
+    if (err.status === 503) {
+      await wait(800);
+      try {
+        return await client.models.generateContent(request);
+      } catch (retryErr) {
+        throw new AppError('The AI assistant is temporarily unavailable. Please try again in a moment.', 503);
+      }
+    }
+    throw err;
+  }
+}
+
 async function runConversation(ctx, messages) {
   const client = getClient();
   if (!client) {
@@ -26,47 +57,47 @@ async function runConversation(ctx, messages) {
     throw new AppError('AI assistant is not configured on this server. Set LLM_MODEL.', 503);
   }
 
-  let workingMessages = [...messages];
+  const contents = messages.map((m) => ({
+    role: m.role === 'assistant' ? 'model' : 'user',
+    parts: [{ text: m.content }],
+  }));
 
   for (let round = 0; round < MAX_TOOL_ROUNDS; round += 1) {
-    const response = await client.messages.create({
+    const response = await generateWithRetry(client, {
       model: process.env.LLM_MODEL,
-      max_tokens: 1024,
-      system: SYSTEM_PROMPT,
-      tools: TOOL_DEFINITIONS,
-      messages: workingMessages,
+      contents,
+      config: {
+        systemInstruction: SYSTEM_PROMPT,
+        tools: GEMINI_TOOLS,
+        thinkingConfig: { thinkingLevel: 'MINIMAL' },
+      },
     });
 
-    const toolUseBlocks = response.content.filter((block) => block.type === 'tool_use');
+    const functionCalls = response.functionCalls;
 
-    if (toolUseBlocks.length === 0) {
-      const textBlock = response.content.find((block) => block.type === 'text');
-      return textBlock ? textBlock.text : '';
+    if (!functionCalls || functionCalls.length === 0) {
+      return response.text || '';
     }
 
-    workingMessages.push({ role: 'assistant', content: response.content });
+    contents.push({ role: 'model', parts: response.candidates[0].content.parts });
 
-    const toolResults = [];
-    for (const block of toolUseBlocks) {
-      const impl = TOOL_IMPLEMENTATIONS[block.name];
+    const responseParts = [];
+    for (const call of functionCalls) {
+      const impl = TOOL_IMPLEMENTATIONS[call.name];
       let result;
       if (!impl) {
-        result = { error: `Unknown tool: ${block.name}` };
+        result = { error: `Unknown tool: ${call.name}` };
       } else {
         try {
-          result = await impl(ctx, block.input || {});
+          result = await impl(ctx, call.args || {});
         } catch (err) {
           result = { error: err.message || 'Tool execution failed' };
         }
       }
-      toolResults.push({
-        type: 'tool_result',
-        tool_use_id: block.id,
-        content: JSON.stringify(result),
-      });
+      responseParts.push({ functionResponse: { name: call.name, response: { output: result } } });
     }
 
-    workingMessages.push({ role: 'user', content: toolResults });
+    contents.push({ role: 'user', parts: responseParts });
   }
 
   return "I'm having trouble completing that request right now. Could you rephrase or try again?";
