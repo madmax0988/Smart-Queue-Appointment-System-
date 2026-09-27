@@ -27,7 +27,8 @@ export default function ChatWidget() {
     setError('');
 
     try {
-      const { data } = await client.post('/chat', { message: text, sessionId });
+      const payload = sessionId ? { message: text, sessionId } : { message: text };
+      const { data } = await client.post('/chat', payload);
       setSessionId(data.data.sessionId);
       setMessages((prev) => [...prev, { role: 'assistant', content: data.data.reply }]);
     } catch (err) {

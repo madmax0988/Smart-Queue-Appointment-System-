@@ -7,7 +7,7 @@ const ctrl = require('../ai/chatController');
 const router = express.Router();
 
 const sendSchema = z.object({
-  body: z.object({ message: z.string().min(1).max(2000), sessionId: z.string().uuid().optional() }),
+  body: z.object({ message: z.string().min(1).max(2000), sessionId: z.string().uuid().nullable().optional() }),
 });
 const idParamSchema = z.object({ params: z.object({ id: z.string().uuid() }) });
 
