@@ -27,7 +27,7 @@ export default function Navbar() {
         <Link to={user ? roleHome : '/'} className="text-lg font-semibold text-brand-700">
           Smart Queue
         </Link>
-        <div className="flex items-center gap-4">
+        <div className="flex flex-wrap items-center justify-end gap-x-3 gap-y-2 sm:gap-x-4">
           {user ? (
             <>
               {user.role === 'CUSTOMER' && (
@@ -39,7 +39,7 @@ export default function Navbar() {
               {user.role === 'STAFF' && <Link to="/staff" className="text-sm text-slate-600 hover:text-brand-600">Staff</Link>}
               {user.role === 'ADMIN' && <Link to="/admin" className="text-sm text-slate-600 hover:text-brand-600">Admin</Link>}
               <NotificationBell />
-              <span className="text-sm text-slate-500">{user.name}</span>
+              <span className="hidden text-sm text-slate-500 sm:inline">{user.name}</span>
               <button onClick={handleLogout} className="btn-secondary">Logout</button>
             </>
           ) : (

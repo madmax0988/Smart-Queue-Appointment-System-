@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import client, { getErrorMessage } from '../api/client';
-import { getSocket } from '../store/socketStore';
+import { getSocket, onSocketChange } from '../store/socketStore';
 
 export default function NotificationBell() {
   const [open, setOpen] = useState(false);
@@ -15,13 +15,22 @@ export default function NotificationBell() {
       .then(({ data }) => mounted && setNotifications(data.data))
       .catch((err) => mounted && setError(getErrorMessage(err)));
 
-    const socket = getSocket();
     const handleNew = (notification) => setNotifications((prev) => [notification, ...prev]);
-    socket?.on('notification:new', handleNew);
+    let current = null;
+    const attach = (socket) => {
+      current = socket;
+      current?.on('notification:new', handleNew);
+    };
+    attach(getSocket());
+    const unsubscribe = onSocketChange((socket) => {
+      current?.off('notification:new', handleNew);
+      attach(socket);
+    });
 
     return () => {
       mounted = false;
-      socket?.off('notification:new', handleNew);
+      current?.off('notification:new', handleNew);
+      unsubscribe();
     };
   }, []);
 

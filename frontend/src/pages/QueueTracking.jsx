@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import client, { getErrorMessage } from '../api/client';
-import { getSocket } from '../store/socketStore';
+import { getSocket, onSocketChange } from '../store/socketStore';
 
 export default function QueueTracking() {
   const { appointmentId } = useParams();
@@ -37,16 +37,29 @@ export default function QueueTracking() {
 
   useEffect(() => {
     if (!appointment) return;
-    const socket = getSocket();
-    if (!socket) return;
-    socket.emit('queue:subscribe', appointment.serviceId);
     const handleUpdate = () => refresh();
-    socket.on('queue:updated', handleUpdate);
-    socket.on('token:called', handleUpdate);
+    let current = null;
+    const attach = (socket) => {
+      current = socket;
+      if (!current) return;
+      current.emit('queue:subscribe', appointment.serviceId);
+      current.on('queue:updated', handleUpdate);
+      current.on('token:called', handleUpdate);
+    };
+    const detach = () => {
+      if (!current) return;
+      current.emit('queue:unsubscribe', appointment.serviceId);
+      current.off('queue:updated', handleUpdate);
+      current.off('token:called', handleUpdate);
+    };
+    attach(getSocket());
+    const unsubscribe = onSocketChange((socket) => {
+      detach();
+      attach(socket);
+    });
     return () => {
-      socket.emit('queue:unsubscribe', appointment.serviceId);
-      socket.off('queue:updated', handleUpdate);
-      socket.off('token:called', handleUpdate);
+      detach();
+      unsubscribe();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [appointment]);

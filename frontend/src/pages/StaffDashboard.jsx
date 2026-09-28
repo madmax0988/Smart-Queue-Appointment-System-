@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import client, { getErrorMessage } from '../api/client';
-import { getSocket } from '../store/socketStore';
+import { getSocket, onSocketChange } from '../store/socketStore';
 
 export default function StaffDashboard() {
   const [services, setServices] = useState([]);
@@ -28,14 +28,27 @@ export default function StaffDashboard() {
 
   useEffect(() => {
     if (!serviceId) return;
-    const socket = getSocket();
-    if (!socket) return;
-    socket.emit('queue:subscribe', serviceId);
     const onUpdate = (payload) => setSnapshot(payload);
-    socket.on('queue:updated', onUpdate);
+    let current = null;
+    const attach = (socket) => {
+      current = socket;
+      if (!current) return;
+      current.emit('queue:subscribe', serviceId);
+      current.on('queue:updated', onUpdate);
+    };
+    const detach = () => {
+      if (!current) return;
+      current.emit('queue:unsubscribe', serviceId);
+      current.off('queue:updated', onUpdate);
+    };
+    attach(getSocket());
+    const unsubscribe = onSocketChange((socket) => {
+      detach();
+      attach(socket);
+    });
     return () => {
-      socket.emit('queue:unsubscribe', serviceId);
-      socket.off('queue:updated', onUpdate);
+      detach();
+      unsubscribe();
     };
   }, [serviceId]);
 

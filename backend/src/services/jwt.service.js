@@ -32,7 +32,13 @@ async function rotateRefreshToken(oldToken) {
   if (!record || record.revoked || record.expiresAt < new Date()) {
     return null;
   }
-  await prisma.refreshToken.update({ where: { id: record.id }, data: { revoked: true } });
+  // Atomic conditional update: only one concurrent caller can win the
+  // revoke-and-rotate race for the same token; the loser gets count 0.
+  const { count } = await prisma.refreshToken.updateMany({
+    where: { id: record.id, revoked: false },
+    data: { revoked: true },
+  });
+  if (count === 0) return null;
   const user = await prisma.user.findUnique({ where: { id: record.userId } });
   if (!user) return null;
   const newRefreshToken = await issueRefreshToken(user);

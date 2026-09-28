@@ -29,7 +29,7 @@ export default function Booking() {
     client.get('/services', { params: { organizationId: orgId } }).then(({ data }) => setServices(data.data)).catch((err) => setError(getErrorMessage(err)));
   }, [orgId]);
 
-  useEffect(() => {
+  const loadSlots = () => {
     if (!serviceId || !date) { setSlots([]); return; }
     setLoadingSlots(true);
     client
@@ -37,7 +37,9 @@ export default function Booking() {
       .then(({ data }) => setSlots(data.data))
       .catch((err) => setError(getErrorMessage(err)))
       .finally(() => setLoadingSlots(false));
-  }, [serviceId, date]);
+  };
+
+  useEffect(loadSlots, [serviceId, date]);
 
   const handleBook = async (slotId) => {
     setBooking(slotId);
@@ -47,6 +49,7 @@ export default function Booking() {
       setSuccess(data.data);
     } catch (err) {
       setError(getErrorMessage(err));
+      if (err?.response?.status === 409) loadSlots();
     } finally {
       setBooking(null);
     }

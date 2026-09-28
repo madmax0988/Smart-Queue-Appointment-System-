@@ -53,15 +53,15 @@ const analytics = asyncHandler(async (req, res) => {
   ]);
 
   const completedEntries = await prisma.queueEntry.findMany({
-    where: { status: 'COMPLETED', calledAt: { not: null }, completedAt: { not: null }, queue: { service: serviceFilter } },
-    select: { calledAt: true, completedAt: true },
+    where: { status: 'COMPLETED', calledAt: { not: null }, queue: { service: serviceFilter } },
+    select: { calledAt: true, createdAt: true },
     take: 500,
-    orderBy: { completedAt: 'desc' },
+    orderBy: { calledAt: 'desc' },
   });
 
   const avgWaitMinutes = completedEntries.length
     ? Math.round(
-        completedEntries.reduce((sum, e) => sum + (e.completedAt.getTime() - e.calledAt.getTime()) / 60000, 0) /
+        completedEntries.reduce((sum, e) => sum + (e.calledAt.getTime() - e.createdAt.getTime()) / 60000, 0) /
           completedEntries.length
       )
     : 0;

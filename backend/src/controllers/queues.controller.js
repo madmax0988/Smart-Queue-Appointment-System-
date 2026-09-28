@@ -1,7 +1,7 @@
 const prisma = require('../config/db');
 const AppError = require('../utils/AppError');
 const asyncHandler = require('../utils/asyncHandler');
-const { buildQueueSnapshot, startOfDay } = require('../services/queue.service');
+const { buildQueueSnapshot, startOfDay, reindexPositions } = require('../services/queue.service');
 const { notify, emitQueueUpdate, emitToUser } = require('../services/notification.service');
 
 async function ensureStaffCanAccessService(user, serviceId, tx = prisma) {
@@ -119,7 +119,9 @@ const updateEntryStatus = asyncHandler(async (req, res) => {
     if (status === 'COMPLETED') {
       await tx.appointment.update({ where: { id: existing.appointmentId }, data: { status: 'COMPLETED' } });
     } else if (status === 'CANCELLED') {
-      await tx.appointment.update({ where: { id: existing.appointmentId }, data: { status: 'CANCELLED' } });
+      const appointment = await tx.appointment.update({ where: { id: existing.appointmentId }, data: { status: 'CANCELLED' } });
+      await tx.appointmentSlot.update({ where: { id: appointment.slotId }, data: { bookedCount: { decrement: 1 } } });
+      await reindexPositions(tx, existing.queueId);
     }
 
     return { updated, appointment: existing.appointment };

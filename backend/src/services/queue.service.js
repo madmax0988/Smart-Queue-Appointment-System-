@@ -9,16 +9,17 @@ function startOfDay(date) {
 
 /**
  * Gets or creates today's queue for a service, inside an existing transaction.
- * Uses SELECT ... FOR UPDATE semantics via a serializable-safe upsert pattern:
- * we rely on the unique(serviceId, queueDate) constraint + retry-free upsert.
+ * Uses an atomic upsert on the unique(serviceId, queueDate) constraint so two
+ * concurrent bookings for the first slot of the day can't both try to insert
+ * the same row (which would otherwise surface as an unhandled P2002 error).
  */
 async function getOrCreateQueue(tx, serviceId, queueDate) {
   const day = startOfDay(queueDate);
-  let queue = await tx.queue.findUnique({ where: { serviceId_queueDate: { serviceId, queueDate: day } } });
-  if (!queue) {
-    queue = await tx.queue.create({ data: { serviceId, queueDate: day } });
-  }
-  return queue;
+  return tx.queue.upsert({
+    where: { serviceId_queueDate: { serviceId, queueDate: day } },
+    create: { serviceId, queueDate: day },
+    update: {},
+  });
 }
 
 /**

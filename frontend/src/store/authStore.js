@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { disconnectSocket } from './socketStore';
 
 const STORAGE_KEY = 'smart-queue-auth';
 
@@ -30,5 +31,6 @@ export const useAuthStore = create((set) => ({
     const next = { user: null, accessToken: null, refreshToken: null };
     persist(next);
     set(next);
+    disconnectSocket();
   },
 }));
