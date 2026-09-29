@@ -22,16 +22,26 @@ const getOne = asyncHandler(async (req, res) => {
 });
 
 const create = asyncHandler(async (req, res) => {
+  const org = await prisma.organization.findUnique({ where: { id: req.body.organizationId } });
+  if (!org) throw new AppError('Organization not found', 404);
   const service = await prisma.service.create({ data: req.body });
   res.status(201).json({ success: true, data: service });
 });
 
 const update = asyncHandler(async (req, res) => {
+  const existing = await prisma.service.findUnique({ where: { id: req.params.id } });
+  if (!existing) throw new AppError('Service not found', 404);
+  if (req.body.organizationId) {
+    const org = await prisma.organization.findUnique({ where: { id: req.body.organizationId } });
+    if (!org) throw new AppError('Organization not found', 404);
+  }
   const service = await prisma.service.update({ where: { id: req.params.id }, data: req.body });
   res.json({ success: true, data: service });
 });
 
 const remove = asyncHandler(async (req, res) => {
+  const existing = await prisma.service.findUnique({ where: { id: req.params.id } });
+  if (!existing) throw new AppError('Service not found', 404);
   await prisma.service.delete({ where: { id: req.params.id } });
   res.json({ success: true, data: null });
 });

@@ -16,11 +16,12 @@ const orgSchema = z.object({
 });
 
 const idParamSchema = z.object({ params: z.object({ id: z.string().uuid() }) });
+const updateSchema = z.object({ params: z.object({ id: z.string().uuid() }), body: orgSchema.shape.body.partial() });
 
 router.get('/', ctrl.list);
 router.get('/:id', validate(idParamSchema), ctrl.getOne);
 router.post('/', authenticate, authorize('ADMIN'), validate(orgSchema), ctrl.create);
-router.patch('/:id', authenticate, authorize('ADMIN'), validate(idParamSchema), ctrl.update);
+router.patch('/:id', authenticate, authorize('ADMIN'), validate(updateSchema), ctrl.update);
 router.delete('/:id', authenticate, authorize('ADMIN'), validate(idParamSchema), ctrl.remove);
 
 module.exports = router;

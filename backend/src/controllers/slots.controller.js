@@ -35,6 +35,15 @@ const generate = asyncHandler(async (req, res) => {
   if (!service) throw new AppError('Service not found', 404);
 
   const day = startOfDay(date);
+  const nextDay = new Date(day);
+  nextDay.setDate(nextDay.getDate() + 1);
+
+  const existing = await prisma.appointmentSlot.findMany({
+    where: { serviceId, startTime: { gte: day, lt: nextDay } },
+    select: { startTime: true },
+  });
+  const existingTimes = new Set(existing.map((s) => s.startTime.getTime()));
+
   const slotsToCreate = [];
   let cursor = new Date(day);
   cursor.setHours(startHour, 0, 0, 0);
@@ -44,18 +53,20 @@ const generate = asyncHandler(async (req, res) => {
   while (cursor < end) {
     const slotEnd = new Date(cursor.getTime() + service.durationMinutes * 60000);
     if (slotEnd > end) break;
-    slotsToCreate.push({
-      serviceId,
-      startTime: new Date(cursor),
-      endTime: slotEnd,
-      capacity: capacity || service.capacityPerSlot,
-    });
+    if (!existingTimes.has(cursor.getTime())) {
+      slotsToCreate.push({
+        serviceId,
+        startTime: new Date(cursor),
+        endTime: slotEnd,
+        capacity: capacity || service.capacityPerSlot,
+      });
+    }
     cursor = slotEnd;
   }
 
-  const created = await prisma.$transaction(
-    slotsToCreate.map((data) => prisma.appointmentSlot.create({ data }))
-  );
+  const created = slotsToCreate.length
+    ? await prisma.$transaction(slotsToCreate.map((data) => prisma.appointmentSlot.create({ data })))
+    : [];
 
   res.status(201).json({ success: true, data: created });
 });
