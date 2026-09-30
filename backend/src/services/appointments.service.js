@@ -105,21 +105,34 @@ async function rescheduleAppointment(userId, role, appointmentId, newSlotId) {
     await tx.appointmentSlot.update({ where: { id: newSlotId }, data: { bookedCount: { increment: 1 } } });
     await tx.appointmentSlot.update({ where: { id: appointment.slotId }, data: { bookedCount: { decrement: 1 } } });
 
-    if (appointment.queueEntry) {
-      await tx.queueEntry.update({ where: { id: appointment.queueEntry.id }, data: { status: 'CANCELLED' } });
-      await reindexPositions(tx, appointment.queueEntry.queueId);
-    }
-
     const updated = await tx.appointment.update({ where: { id: appointmentId }, data: { slotId: newSlotId, status: 'CONFIRMED' } });
 
+    const oldQueueId = appointment.queueEntry?.queueId;
     const queue = await getOrCreateQueue(tx, appointment.serviceId, newSlot.startTime);
     await tx.$executeRaw`SELECT * FROM "Queue" WHERE id = ${queue.id} FOR UPDATE`;
     const { tokenNumber, tokenLabel, position } = await generateNextToken(tx, queue.id);
-    const queueEntry = await tx.queueEntry.create({
-      data: { queueId: queue.id, appointmentId: updated.id, tokenNumber, tokenLabel, position },
-    });
 
-    return { appointment: updated, queueEntry, service: appointment.service, oldQueueId: appointment.queueEntry?.queueId };
+    // QueueEntry.appointmentId is unique (one queue entry per appointment), so a
+    // reschedule must move the existing entry to the new queue/token rather than
+    // cancelling it and inserting a second row for the same appointment — that
+    // second insert would collide with the still-present cancelled row.
+    let queueEntry;
+    if (appointment.queueEntry) {
+      queueEntry = await tx.queueEntry.update({
+        where: { id: appointment.queueEntry.id },
+        data: { queueId: queue.id, tokenNumber, tokenLabel, position, status: 'WAITING', calledAt: null, completedAt: null },
+      });
+    } else {
+      queueEntry = await tx.queueEntry.create({
+        data: { queueId: queue.id, appointmentId: updated.id, tokenNumber, tokenLabel, position },
+      });
+    }
+
+    if (oldQueueId && oldQueueId !== queue.id) {
+      await reindexPositions(tx, oldQueueId);
+    }
+
+    return { appointment: updated, queueEntry, service: appointment.service, oldQueueId };
   });
 
   await notify(
