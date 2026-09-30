@@ -52,9 +52,6 @@ export default function Login() {
         <p className="mt-4 text-sm text-slate-500">
           No account? <Link to="/register" className="text-brand-600 hover:underline">Sign up</Link>
         </p>
-        <div className="mt-6 rounded-lg bg-slate-50 p-3 text-xs text-slate-500">
-          Demo accounts (after seeding): admin@smartqueue.dev · staff@smartqueue.dev · customer@smartqueue.dev — password: Password123!
-        </div>
       </div>
     </div>
   );
