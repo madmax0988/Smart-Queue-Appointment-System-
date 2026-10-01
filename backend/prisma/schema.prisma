@@ -121,7 +121,7 @@ model AppointmentSlot {
   appointments Appointment[]
   createdAt   DateTime @default(now())
 
-  @@index([serviceId, startTime])
+  @@unique([serviceId, startTime])
 }
 
 model Appointment {
