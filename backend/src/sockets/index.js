@@ -1,10 +1,11 @@
 const jwt = require('jsonwebtoken');
 const { Server } = require('socket.io');
 const { attachSocketServer } = require('../services/notification.service');
+const { createCorsOriginChecker } = require('../config/cors');
 
 function initSockets(httpServer) {
   const io = new Server(httpServer, {
-    cors: { origin: process.env.CORS_ORIGIN || 'http://localhost:5173', credentials: true },
+    cors: { origin: createCorsOriginChecker(process.env.CORS_ORIGIN), credentials: true },
   });
 
   io.use((socket, next) => {

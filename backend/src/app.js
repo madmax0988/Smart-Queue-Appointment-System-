@@ -4,6 +4,7 @@ const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 
 const { notFoundHandler, errorHandler } = require('./middleware/error');
+const { createCorsOriginChecker } = require('./config/cors');
 
 const authRoutes = require('./routes/auth.routes');
 const organizationsRoutes = require('./routes/organizations.routes');
@@ -18,7 +19,7 @@ const adminRoutes = require('./routes/admin.routes');
 const app = express();
 
 app.use(helmet());
-app.use(cors({ origin: process.env.CORS_ORIGIN || 'http://localhost:5173', credentials: true }));
+app.use(cors({ origin: createCorsOriginChecker(process.env.CORS_ORIGIN), credentials: true }));
 app.use(express.json({ limit: '1mb' }));
 
 const rateLimitHandler = (req, res) => {
